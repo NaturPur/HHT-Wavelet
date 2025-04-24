@@ -110,9 +110,9 @@ def plot_energy_over_frequency(frequencies1, coefficients1, label1, frequencies2
 # Hauptfunktion
 if __name__ == "__main__":
     # Pfade zu den WAV-Dateien
-    file_path1 = r"G:\Meine Ablage\Uni\Masterthesis\Audiodaten\BASF - noclipping\noise\eg_zentrifugalpumpe\straight\free flow\air\#2 Rundloch 1.0mm\mic_1m_0.3173g_s.wav"
-    file_path2 = r"G:\Meine Ablage\Uni\Masterthesis\Audiodaten\BASF - noclipping\noise\eg_zentrifugalpumpe\straight\free flow\air\#2 Rundloch 1.0mm\mic_1m_0.5145g_s.wav"
-    file_path3 = r"G:\Meine Ablage\Uni\Masterthesis\Audiodaten\BASF - noclipping\noise\eg_zentrifugalpumpe\straight\free flow\air\#2 Rundloch 1.0mm\mic_1m_0.9324g_s.wav"  # Dritte Aufnahme
+    file_path1 = r"C:\Users\denni\Desktop\Audiodaten\HKA\nonoise\mic_1m_0.0000g_s_20241218_101110.wav"
+    file_path2 = r"C:\Users\denni\Desktop\Audiodaten\HKA\noise\outdoor parking lot\straight\free flow\co2\#2 Rundloch 1.00mm\mic_1m_0.2615g_s.wav"
+    file_path3 = r"C:\Users\denni\Desktop\Audiodaten\HKA\noise\outdoor parking lot\straight\free flow\co2\#2 Rundloch 1.00mm\mic_1m_1.0016g_s.wav"  # Dritte Aufnahme
 
     # Labels aus den Dateinamen extrahieren
     label1 = os.path.basename(file_path1)
