@@ -1,4 +1,4 @@
-# Version: 1.5.0
+# Version: 1.6.0
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -26,7 +26,7 @@ CONFIG = {
 }
 
 
-# Funktion zum Laden der WAV-datei und Extrahieren der Metadaten
+# Funktion zum Laden der WAV-Datei und Extrahieren der Metadaten
 def load_wav(file_path, max_duration=None, amplitude_factor=1.0):
     sample_rate, data = wavfile.read(file_path)
     with wave.open(file_path, 'rb') as wav_file:
@@ -101,49 +101,81 @@ def compute_wavelet_transform(data, sample_rate, wavelet='cmor1.5-2.0', scales=n
     return coefficients, frequencies
 
 
-# Funktion zum Plotten der akustischen Energie über die Frequenz für eine Datei
-def plot_energy_over_frequency(frequencies, coefficients, freq_range=None, title_prefix=""):
-    # Energie berechnen (Summe der quadrierten Amplituden über die Zeit für jedes Frequenzband)
-    coef_abs = np.abs(coefficients)
-    # Energie als Leistung (Amplitude^2) berechnen
-    energy_over_freq = np.sum(coef_abs ** 2, axis=1)  # Summe über die Zeit
-    # Normalisierung der Energie (auf Maximum = 1)
-    if energy_over_freq.max() > 0:
-        energy_over_freq = energy_over_freq / energy_over_freq.max()
+# Funktion zum Plotten der akustischen Energie über die Frequenz für Wavelet und STFT in einem Diagramm
+def plot_energy_over_frequency(frequencies_wavelet, coefficients_wavelet, frequencies_stft, coefficients_stft,
+                               freq_range=None):
+    # Energie für Wavelet berechnen
+    coef_abs_wavelet = np.abs(coefficients_wavelet)
+    energy_wavelet = np.sum(coef_abs_wavelet ** 2, axis=1)  # Summe über die Zeit
+    if energy_wavelet.max() > 0:
+        energy_wavelet = energy_wavelet / energy_wavelet.max()
     else:
-        print(f"Warnung: Maximale Energie ist 0 bei {title_prefix}")
+        print("Warnung: Maximale Energie für Wavelet ist 0")
+
+    # Energie für STFT berechnen
+    coef_abs_stft = np.abs(coefficients_stft)
+    energy_stft = np.sum(coef_abs_stft ** 2, axis=1)  # Summe über die Zeit
+    if energy_stft.max() > 0:
+        energy_stft = energy_stft / energy_stft.max()
+    else:
+        print("Warnung: Maximale Energie für STFT ist 0")
 
     # Debug: Energie überprüfen
-    print(f"{title_prefix} Energie Min: {energy_over_freq.min():.2e}, Max: {energy_over_freq.max():.2e}")
+    print(f"Wavelet Energie Min: {energy_wavelet.min():.2e}, Max: {energy_wavelet.max():.2e}")
+    print(f"STFT Energie Min: {energy_stft.min():.2e}, Max: {energy_stft.max():.2e}")
 
-    # Frequenzbereich einschränken, falls angegeben
+    # Frequenzbereich für Wavelet einschränken, falls angegeben
     if freq_range is not None:
         freq_min, freq_max = freq_range
-        freq_mask = (frequencies >= freq_min) & (frequencies <= freq_max)
-        frequencies = frequencies[freq_mask]
-        energy_over_freq = energy_over_freq[freq_mask]
-        title = f'{title_prefix} Akustische Energie über die Frequenz ({freq_min / 1000:.0f}–{freq_max / 1000:.0f} kHz)'
+        freq_mask_wavelet = (frequencies_wavelet >= freq_min) & (frequencies_wavelet <= freq_max)
+        frequencies_wavelet = frequencies_wavelet[freq_mask_wavelet]
+        energy_wavelet = energy_wavelet[freq_mask_wavelet]
     else:
-        title = f'{title_prefix} Akustische Energie über die Frequenz (0–20 kHz)'
+        freq_min, freq_max = 0, 20000
 
-    # Plot erstellen (Frequenz auf x-Achse, Energie auf y-Achse)
-    plt.figure(figsize=(12, 6))
-    plt.plot(frequencies, energy_over_freq)
-    plt.title(title)
-    plt.xlabel('Frequenz [Hz]')
-    plt.ylabel('Energie (normalisiert)')
+    # Frequenzbereich für STFT einschränken, falls angegeben
     if freq_range is not None:
-        plt.xlim(freq_range[0], freq_range[1])
+        freq_mask_stft = (frequencies_stft >= freq_min) & (frequencies_stft <= freq_max)
+        frequencies_stft = frequencies_stft[freq_mask_stft]
+        energy_stft = energy_stft[freq_mask_stft]
+
+    # Plot erstellen
+    fig, ax1 = plt.subplots(figsize=(12, 6))
+
+    # Wavelet auf der linken y-Achse plotten (Blau)
+    ax1.plot(frequencies_wavelet, energy_wavelet, color='blue', label='Wavelet')
+    ax1.set_xlabel('Frequenz [Hz]')
+    ax1.set_ylabel('Energie (Wavelet, normalisiert)', color='blue')
+    ax1.tick_params(axis='y', labelcolor='blue')
+    ax1.grid(True)
+    ax1.set_xlim(freq_min, freq_max)
+
+    # STFT auf der rechten y-Achse plotten (Rot)
+    ax2 = ax1.twinx()
+    ax2.plot(frequencies_stft, energy_stft, color='red', label='STFT')
+    ax2.set_ylabel('Energie (STFT, normalisiert)', color='red')
+    ax2.tick_params(axis='y', labelcolor='red')
+
+    # Dynamische Skalierung der y-Achsen
+    max_energy_wavelet = energy_wavelet.max()
+    max_energy_stft = energy_stft.max()
+    if max_energy_wavelet > 0:
+        ax1.set_ylim(0, max_energy_wavelet * 1.1)  # 10% Spielraum
     else:
-        plt.xlim(0, 20000)
-    plt.grid(True)
-    # y-Achse dynamisch skalieren (automatisch basierend auf den Daten)
-    max_energy = energy_over_freq.max()
-    if max_energy > 0:
-        plt.ylim(0, max_energy * 1.1)  # 10% Spielraum über dem Maximum
+        ax1.set_ylim(0, 1)
+    if max_energy_stft > 0:
+        ax2.set_ylim(0, max_energy_stft * 1.1)  # 10% Spielraum
     else:
-        plt.ylim(0, 1)  # Fallback, falls max_energy 0 ist
-    return plt.gcf()
+        ax2.set_ylim(0, 1)
+
+    # Titel und Legende
+    plt.title(f'Akustische Energie über die Frequenz ({freq_min / 1000:.0f}–{freq_max / 1000:.0f} kHz)')
+    # Kombinierte Legende
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper right')
+
+    return fig
 
 
 # Funktion zur Verarbeitung einer einzelnen WAV-Datei (für Multiprocessing)
@@ -188,27 +220,16 @@ def process_single_wav(file_info, input_dir, output_dir):
             bandpass_high=CONFIG['wavelet_bandpass_high']
         )
 
-        # Energie über die Frequenz plotten (Wavelet)
+        # Energie über die Frequenz plotten (Wavelet und STFT kombiniert)
         fig = plot_energy_over_frequency(
             frequencies_wavelet, coefficients,
-            freq_range=CONFIG['freq_range'],
-            title_prefix="Wavelet:"
-        )
-        output_path = os.path.join(output_subdir, f"{os.path.splitext(file)[0]}_wavelet_energy.png")
-        fig.savefig(output_path)
-        plt.close(fig)
-        print(f"Wavelet-Diagramm gespeichert: {output_path}")
-
-        # Energie über die Frequenz plotten (STFT)
-        fig = plot_energy_over_frequency(
             frequencies_stft, Zxx,
-            freq_range=CONFIG['freq_range'],
-            title_prefix="STFT:"
+            freq_range=CONFIG['freq_range']
         )
-        output_path = os.path.join(output_subdir, f"{os.path.splitext(file)[0]}_stft_energy.png")
+        output_path = os.path.join(output_subdir, f"{os.path.splitext(file)[0]}_combined_energy.png")
         fig.savefig(output_path)
         plt.close(fig)
-        print(f"STFT-Diagramm gespeichert: {output_path}")
+        print(f"Kombiniertes Diagramm (Wavelet & STFT) gespeichert: {output_path}")
 
 
 # Hauptfunktion mit Multiprocessing
