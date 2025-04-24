@@ -1,4 +1,4 @@
-# Version: 1.6.0
+# Version: 1.7.0
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -12,17 +12,18 @@ from functools import partial
 
 # Einstellbare Parameter (oben im Skript)
 CONFIG = {
-    'stft_bandpass_low': 500,  # Untere Grenze des Bandpassfilters für STFT (Hz)
-    'stft_bandpass_high': 20000,  # Obere Grenze des Bandpassfilters für STFT (Hz)
+    'stft_bandpass_low': 1,  # Untere Grenze des Bandpassfilters für STFT (Hz)
+    'stft_bandpass_high': 2000,  # Obere Grenze des Bandpassfilters für STFT (Hz)
     'wavelet_bandpass_low': 1,  # Untere Grenze des Bandpassfilters für Wavelet (Hz)
-    'wavelet_bandpass_high': 20000,  # Obere Grenze des Bandpassfilters für Wavelet (Hz)
+    'wavelet_bandpass_high': 2000,  # Obere Grenze des Bandpassfilters für Wavelet (Hz)
     'amplitude_factor': 100.0,  # Amplitudenverstärkungsfaktor
-    'wavelet_type': 'cmor1.5-2.0',  # Wavelet-Typ für die Wavelet-Transformation
-    'wavelet_scales': np.arange(1, 128),  # Skalen für die Wavelet-Transformation
+    'wavelet_type': 'cmor1.5-2.0',  # Wavelet-Typ für die Wavelet-Transformation (angepasst, um Warnung zu vermeiden)
+    'wavelet_scales': np.arange(1, 64),  # Skalen für die Wavelet-Transformation (reduziert für bessere Performance)
     'stft_nperseg': 2048,  # Fenstergröße für die STFT (erhöht für bessere Frequenzauflösung)
-    'stft_noverlap': 1024,  # Überlappung für die STFT (angepasst an nperseg)
+    'stft_noverlap': 512,  # Überlappung für die STFT (angepasst an nperseg)
     'max_duration': 10,  # Maximale Dauer der Aufnahme in Sekunden (None für gesamte Datei)
-    'freq_range': (1, 20000),  # Frequenzbereich für die Visualisierung (Hz)
+    'freq_range': (1, 2000),  # Frequenzbereich für die Visualisierung (Hz)
+    'num_processes': 5,  # Anzahl der Prozesse für Multiprocessing (reduziert für bessere Stabilität)
 }
 
 
@@ -80,7 +81,7 @@ def compute_stft(data, sample_rate, nperseg=1024, noverlap=512, bandpass_low=Non
 
 
 # Funktion zur Durchführung der Wavelet-Transformation
-def compute_wavelet_transform(data, sample_rate, wavelet='cmor1.5-2.0', scales=np.arange(1, 128), max_freq=20000,
+def compute_wavelet_transform(data, sample_rate, wavelet='cmor1.5-2.0', scales=np.arange(1, 64), max_freq=20000,
                               bandpass_low=None, bandpass_high=None):
     # Bandpassfilter anwenden, falls angegeben
     if bandpass_low is not None and bandpass_high is not None:
@@ -180,56 +181,63 @@ def plot_energy_over_frequency(frequencies_wavelet, coefficients_wavelet, freque
 
 # Funktion zur Verarbeitung einer einzelnen WAV-Datei (für Multiprocessing)
 def process_single_wav(file_info, input_dir, output_dir):
-    root, file = file_info
-    if file.lower().endswith('.wav'):
-        # Pfad zur WAV-Datei
-        wav_path = os.path.join(root, file)
+    try:
+        root, file = file_info
+        if file.lower().endswith('.wav'):
+            # Pfad zur WAV-Datei
+            wav_path = os.path.join(root, file)
 
-        # Zielpfad für das Diagramm (Struktur ab 'Audiodaten' nachbilden)
-        audiodaten_index = root.find('Audiodaten')
-        if audiodaten_index == -1:
-            raise ValueError(f"Verzeichnis 'Audiodaten' nicht im Pfad {root} gefunden.")
+            # Zielpfad für das Diagramm (Struktur ab 'Audiodaten' nachbilden)
+            audiodaten_index = root.find('Audiodaten')
+            if audiodaten_index == -1:
+                raise ValueError(f"Verzeichnis 'Audiodaten' nicht im Pfad {root} gefunden.")
 
-        # Extrahiere den relativen Pfad ab 'Audiodaten'
-        relative_path = root[audiodaten_index:]
-        output_subdir = os.path.join(output_dir, relative_path)
-        os.makedirs(output_subdir, exist_ok=True)
+            # Extrahiere den relativen Pfad ab 'Audiodaten'
+            relative_path = root[audiodaten_index:]
+            output_subdir = os.path.join(output_dir, relative_path)
+            os.makedirs(output_subdir, exist_ok=True)
 
-        # WAV-Datei laden und transformieren
-        sample_rate, data = load_wav(
-            wav_path,
-            max_duration=CONFIG['max_duration'],
-            amplitude_factor=CONFIG['amplitude_factor']
-        )
+            # WAV-Datei laden und transformieren
+            sample_rate, data = load_wav(
+                wav_path,
+                max_duration=CONFIG['max_duration'],
+                amplitude_factor=CONFIG['amplitude_factor']
+            )
 
-        # STFT berechnen
-        frequencies_stft, times_stft, Zxx = compute_stft(
-            data, sample_rate,
-            nperseg=CONFIG['stft_nperseg'],
-            noverlap=CONFIG['stft_noverlap'],
-            bandpass_low=CONFIG['stft_bandpass_low'],
-            bandpass_high=CONFIG['stft_bandpass_high']
-        )
+            # STFT berechnen
+            frequencies_stft, times_stft, Zxx = compute_stft(
+                data, sample_rate,
+                nperseg=CONFIG['stft_nperseg'],
+                noverlap=CONFIG['stft_noverlap'],
+                bandpass_low=CONFIG['stft_bandpass_low'],
+                bandpass_high=CONFIG['stft_bandpass_high']
+            )
 
-        # Wavelet-Transformation berechnen
-        coefficients, frequencies_wavelet = compute_wavelet_transform(
-            data, sample_rate,
-            wavelet=CONFIG['wavelet_type'],
-            scales=CONFIG['wavelet_scales'],
-            bandpass_low=CONFIG['wavelet_bandpass_low'],
-            bandpass_high=CONFIG['wavelet_bandpass_high']
-        )
+            # Wavelet-Transformation berechnen
+            coefficients, frequencies_wavelet = compute_wavelet_transform(
+                data, sample_rate,
+                wavelet=CONFIG['wavelet_type'],
+                scales=CONFIG['wavelet_scales'],
+                bandpass_low=CONFIG['wavelet_bandpass_low'],
+                bandpass_high=CONFIG['wavelet_bandpass_high']
+            )
 
-        # Energie über die Frequenz plotten (Wavelet und STFT kombiniert)
-        fig = plot_energy_over_frequency(
-            frequencies_wavelet, coefficients,
-            frequencies_stft, Zxx,
-            freq_range=CONFIG['freq_range']
-        )
-        output_path = os.path.join(output_subdir, f"{os.path.splitext(file)[0]}_combined_energy.png")
-        fig.savefig(output_path)
-        plt.close(fig)
-        print(f"Kombiniertes Diagramm (Wavelet & STFT) gespeichert: {output_path}")
+            # Energie über die Frequenz plotten (Wavelet und STFT kombiniert)
+            fig = plot_energy_over_frequency(
+                frequencies_wavelet, coefficients,
+                frequencies_stft, Zxx,
+                freq_range=CONFIG['freq_range']
+            )
+            output_path = os.path.join(output_subdir, f"{os.path.splitext(file)[0]}_combined_energy.png")
+            fig.savefig(output_path)
+            plt.close(fig)
+            print(f"Kombiniertes Diagramm (Wavelet & STFT) gespeichert: {output_path}")
+    except KeyboardInterrupt:
+        print(f"Prozess für Datei {file} abgebrochen (KeyboardInterrupt).")
+        raise
+    except Exception as e:
+        print(f"Fehler bei der Verarbeitung von Datei {file}: {str(e)}")
+        raise
 
 
 # Hauptfunktion mit Multiprocessing
@@ -241,22 +249,33 @@ def process_wav_files(input_dir, output_dir):
             if file.lower().endswith('.wav'):
                 wav_files.append((root, file))
 
-    # Anzahl der Prozesse (Standard: Anzahl der CPU-Kerne)
-    num_processes = mp.cpu_count()
+    # Anzahl der Prozesse (reduziert für bessere Stabilität)
+    num_processes = CONFIG['num_processes']
     print(f"Verwende {num_processes} Prozesse für die Verarbeitung.")
 
     # Pool für Multiprocessing erstellen
-    with mp.Pool(processes=num_processes) as pool:
-        # Teilverarbeitungsfunktion mit input_dir und output_dir fixieren
-        process_func = partial(process_single_wav, input_dir=input_dir, output_dir=output_dir)
-        # Parallele Verarbeitung der WAV-Dateien
-        pool.map(process_func, wav_files)
+    try:
+        with mp.Pool(processes=num_processes) as pool:
+            # Teilverarbeitungsfunktion mit input_dir und output_dir fixieren
+            process_func = partial(process_single_wav, input_dir=input_dir, output_dir=output_dir)
+            # Parallele Verarbeitung der WAV-Dateien
+            pool.map(process_func, wav_files)
+    except KeyboardInterrupt:
+        print("Multiprocessing abgebrochen (KeyboardInterrupt).")
+        pool.terminate()
+        pool.join()
+        raise
+    except Exception as e:
+        print(f"Fehler im Multiprocessing: {str(e)}")
+        pool.terminate()
+        pool.join()
+        raise
 
 
 # Hauptfunktion
 if __name__ == "__main__":
     # Eingabe- und Ausgabeverzeichnis
-    input_dir = r"C:\Users\denni\Desktop\Audiodaten\HKA\noise\outdoor parking lot\straight\free flow\co2\#2 Rundloch 1.00mm"
+    input_dir = r"C:\Users\denni\Desktop\Audiodaten\HKA\nonoise"
     output_dir = r"C:\Users\denni\Desktop\Audiodaten\Wavelet"
 
     # Verzeichnisstruktur durchlaufen und Diagramme erstellen
